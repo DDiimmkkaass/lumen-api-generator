@@ -1,0 +1,26 @@
+{
+    "name": "ddiimmkkaass/lumen-api-generator",
+    "description": "Two simple tools for building REST APIs with fractal: console generator and API skeleton",
+    "license": "MIT",
+    "keywords": ["rest", "api", "fractal", "generator", "lumen"],
+    "authors": [
+        {
+            "name": "DDiimmkkaass",
+            "email": "ddiimmkkaass@gmail.com"
+        }
+    ],
+    "homepage": "https://github.com/DDiimmkkaass/lumen-api-generator",
+    "require": {
+        "php": ">=5.4.0",
+        "illuminate/support": "5.*",
+        "league/fractal": "0.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "DDiimmkkaass\\Api\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    }
+}
