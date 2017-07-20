@@ -2,7 +2,7 @@
 [![Scrutinizer Quality Score](https://img.shields.io/scrutinizer/g/DDiimmkkaass/lumen-api-generator/master.svg?style=flat)](https://scrutinizer-ci.com/g/DDiimmkkaass/lumen-api-generator/)
 [![MIT License](https://img.shields.io/packagist/l/DDiimmkkaass/lumen-api-generator.svg?style=flat)](https://packagist.org/packages/DDiimmkkaass/lumen-api-generator)
 
-# This is full copy of [arrilot/laravel-api-generator](https://github.com/arrilot/laravel-api-generator) adapted for Lumen
+# This is the full copy of [arrilot/laravel-api-generator](https://github.com/arrilot/laravel-api-generator) adapted for Lumen
 
 # Lumen Api Generator
 
