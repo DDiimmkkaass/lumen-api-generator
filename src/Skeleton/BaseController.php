@@ -3,8 +3,7 @@
 namespace DDiimmkkaass\Api\Skeleton;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\JsonResponse;
 use Laravel\Lumen\Routing\Controller as LumenController;
 use League\Fractal\Manager;
 use League\Fractal\Pagination\Cursor;
@@ -27,13 +26,6 @@ abstract class BaseController extends LumenController
      * @var Manager
      */
     protected $fractal;
-
-    /**
-     * Eloquent model instance.
-     *
-     * @var \Illuminate\Database\Eloquent\Model;
-     */
-    protected $model;
 
     /**
      * Fractal Transformer instance.
@@ -92,7 +84,6 @@ abstract class BaseController extends LumenController
      */
     public function __construct(Request $request)
     {
-        $this->model = $this->model();
         $this->transformer = $this->transformer();
 
         $this->fractal = new Manager();
@@ -104,13 +95,6 @@ abstract class BaseController extends LumenController
             $this->fractal->parseIncludes(camel_case($this->request->input('include')));
         }
     }
-
-    /**
-     * Eloquent model.
-     *
-     * @return \Illuminate\Database\Eloquent\Model
-     */
-    abstract protected function model();
 
     /**
      * Transformer for the current model.
@@ -127,148 +111,6 @@ abstract class BaseController extends LumenController
     protected function serializer()
     {
         return new DataArraySerializer();
-    }
-
-    /**
-     * Display a listing of the resource.
-     * GET /api/{resource}.
-     *
-     * @return Response
-     */
-    public function index()
-    {
-        $with = $this->getEagerLoad();
-        $skip = (int) $this->request->input('skip', 0);
-        $limit = $this->calculateLimit();
-
-        $items = $limit
-            ? $this->model->with($with)->skip($skip)->limit($limit)->get()
-            : $this->model->with($with)->get();
-
-        return $this->respondWithCollection($items, $skip, $limit);
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     * POST /api/{resource}.
-     *
-     * @return Response
-     */
-    public function store()
-    {
-        $data = $this->request->json()->get($this->resourceKeySingular);
-
-        if (!$data) {
-            return $this->errorWrongArgs('Empty data');
-        }
-
-        $validator = Validator::make($data, $this->rulesForCreate());
-        if ($validator->fails()) {
-            return $this->errorWrongArgs($validator->messages());
-        }
-
-        $this->unguardIfNeeded();
-
-        $item = $this->model->create($data);
-
-        return $this->respondWithItem($item);
-    }
-
-    /**
-     * Display the specified resource.
-     * GET /api/{resource}/{id}.
-     *
-     * @param int $id
-     *
-     * @return Response
-     */
-    public function show($id)
-    {
-        $with = $this->getEagerLoad();
-
-        $item = $this->findItem($id, $with);
-        if (!$item) {
-            return $this->errorNotFound();
-        }
-
-        return $this->respondWithItem($item);
-    }
-
-    /**
-     * Update the specified resource in storage.
-     * PUT /api/{resource}/{id}.
-     *
-     * @param int $id
-     *
-     * @return Response
-     */
-    public function update($id)
-    {
-        $data = $this->request->json()->get($this->resourceKeySingular);
-
-        if (!$data) {
-            return $this->errorWrongArgs('Empty data');
-        }
-
-        $item = $this->findItem($id);
-        if (!$item) {
-            return $this->errorNotFound();
-        }
-
-        $validator = Validator::make($data, $this->rulesForUpdate($item->id));
-        if ($validator->fails()) {
-            return $this->errorWrongArgs($validator->messages());
-        }
-
-        $this->unguardIfNeeded();
-
-        $item->fill($data);
-        $item->save();
-
-        return $this->respondWithItem($item);
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     * DELETE /api/{resource}/{id}.
-     *
-     * @param int $id
-     *
-     * @return Response
-     */
-    public function destroy($id)
-    {
-        $item = $this->findItem($id);
-
-        if (!$item) {
-            return $this->errorNotFound();
-        }
-
-        $item->delete();
-
-        return response()->json(['message' => 'Deleted']);
-    }
-
-    /**
-     * Show the form for creating the specified resource.
-     *
-     * @return Response
-     */
-    public function create()
-    {
-        return $this->errorNotImplemented();
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param int $id
-     *
-     * @return Response
-     */
-    public function edit($id)
-    {
-        return $this->errorNotImplemented();
     }
 
     /**
@@ -298,13 +140,19 @@ abstract class BaseController extends LumenController
     /**
      * Respond with a given item.
      *
-     * @param $item
+     * @param                                          $item
+     * @param \League\Fractal\TransformerAbstract|null $transformer
+     * @param string|null                              $resourceKeySingular
      *
-     * @return mixed
+     * @return JsonResponse
      */
-    protected function respondWithItem($item)
+    protected function respondWithItem($item, $transformer = null, $resourceKeySingular = null)
     {
-        $resource = new Item($item, $this->transformer, $this->resourceKeySingular);
+        $resource = new Item(
+            $item,
+            $transformer ? : $this->transformer,
+            $resourceKeySingular ? : $this->resourceKeySingular
+        );
 
         $rootScope = $this->prepareRootScope($resource);
 
@@ -314,15 +162,26 @@ abstract class BaseController extends LumenController
     /**
      * Respond with a given collection.
      *
-     * @param $collection
-     * @param int $skip
-     * @param int $limit
+     * @param                                          $collection
+     * @param int                                      $skip
+     * @param int                                      $limit
+     * @param \League\Fractal\TransformerAbstract|null $transformer
+     * @param string|null                              $resourceKeyPlural
      *
-     * @return mixed
+     * @return JsonResponse
      */
-    protected function respondWithCollection($collection, $skip = 0, $limit = 0)
+    protected function respondWithCollection(
+        $collection,
+        $skip = 0,
+        $limit = 0,
+        $transformer = null,
+        $resourceKeyPlural = null
+    )
     {
-        $resource = new Collection($collection, $this->transformer, $this->resourceKeyPlural);
+        $resource = new Collection(
+            $collection,
+            $transformer ? : $this->transformer,
+            $resourceKeyPlural ? : $this->resourceKeyPlural);
 
         if ($limit) {
             $cursor = new Cursor($skip, $skip + $limit, $collection->count());
@@ -340,7 +199,7 @@ abstract class BaseController extends LumenController
      * @param array $array
      * @param array $headers
      *
-     * @return mixed
+     * @return JsonResponse
      */
     protected function respondWithArray(array $array, array $headers = [])
     {
@@ -373,9 +232,9 @@ abstract class BaseController extends LumenController
      */
     protected function prepareRootScope($resource)
     {
-        $resource->setMetaValue('available_includes', $this->transformer->getAvailableIncludes());
-        $resource->setMetaValue('default_includes', $this->transformer->getDefaultIncludes());
-
+        $resource->setMetaValue('available_includes', $resource->getTransformer()->getAvailableIncludes());
+        $resource->setMetaValue('default_includes', $resource->getTransformer()->getDefaultIncludes());
+    
         return $this->fractal->createData($resource);
     }
 
@@ -406,7 +265,7 @@ abstract class BaseController extends LumenController
      *
      * @param $message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorForbidden($message = 'Forbidden')
     {
@@ -418,7 +277,7 @@ abstract class BaseController extends LumenController
      *
      * @param string $message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorInternalError($message = 'Internal Error')
     {
@@ -430,7 +289,7 @@ abstract class BaseController extends LumenController
      *
      * @param string $message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorNotFound($message = 'Resource Not Found')
     {
@@ -442,7 +301,7 @@ abstract class BaseController extends LumenController
      *
      * @param string $message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorUnauthorized($message = 'Unauthorized')
     {
@@ -454,19 +313,31 @@ abstract class BaseController extends LumenController
      *
      * @param string$message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorWrongArgs($message = 'Wrong Arguments')
     {
         return $this->setStatusCode(400)->respondWithError($message);
     }
-
+    
+    /**
+     * Response with validation error.
+     *
+     * @param array $messages
+     *
+     * @return JsonResponse
+     */
+    protected function errorValidation(array $messages = [])
+    {
+        return $this->setStatusCode(422)->respondWithArray(['errors' => $messages]);
+    }
+    
     /**
      * Generate a Response with a 501 HTTP header and a given message.
      *
      * @param string $message
      *
-     * @return Response
+     * @return JsonResponse
      */
     protected function errorNotImplemented($message = 'Not implemented')
     {
@@ -480,28 +351,20 @@ abstract class BaseController extends LumenController
      */
     protected function getEagerLoad()
     {
-        $include = camel_case($this->request->input('include', ''));
+        $include = $this->request->input('include', '');
         $includes = explode(',', $include);
         $includes = array_filter($includes);
-
-        return $includes ?: [];
-    }
-
-    /**
-     * Get item according to mode.
-     *
-     * @param int   $id
-     * @param array $with
-     *
-     * @return mixed
-     */
-    protected function findItem($id, array $with = [])
-    {
-        if ($this->request->has('use_as_id')) {
-            return $this->model->with($with)->where($this->request->input('use_as_id'), '=', $id)->first();
+        
+        foreach ($includes as $i => $include) {
+            if (strpos($include, ':')) {
+                $include = explode(':', $include);
+                $include = $include[0];
+            }
+            
+            $includes[$i] = $include;
         }
-
-        return $this->model->with($with)->find($id);
+        
+        return $includes ? : [];
     }
 
     /**
